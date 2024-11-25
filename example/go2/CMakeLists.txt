@@ -22,3 +22,6 @@ target_link_libraries(go2_vui_client unitree_sdk2)
 
 add_executable(subscribe_pointcloud subscribe_pointcloud.cpp)
 target_link_libraries(subscribe_pointcloud unitree_sdk2)
+
+add_executable(server server.cpp)
+target_link_libraries(server unitree_sdk2)

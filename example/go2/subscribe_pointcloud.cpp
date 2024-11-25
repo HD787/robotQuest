@@ -24,15 +24,15 @@ void Handler(const void *message)
             << std::endl;
 }
 
-int main(int argc, const char **argv)
+int getData(int argc, const char **val)
 {
   if (argc < 2)
   {
-    std::cout << "Usage: " << argv[0] << " networkInterface" << std::endl;
+    std::cout << "Usage: " << val[0] << " networkInterface" << std::endl;
     exit(-1);
   }
 
-  ChannelFactory::Instance()->Init(0, argv[1]);
+  ChannelFactory::Instance()->Init(0, val[1]);
 
   ChannelSubscriber<sensor_msgs::msg::dds_::PointCloud2_> subscriber(TOPIC_CLOUD);
   subscriber.InitChannel(Handler);
