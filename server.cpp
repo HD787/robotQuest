@@ -11,9 +11,6 @@
 
 int main(){
 
-
-
-
     int sockfd;
     struct sockaddr_in server_addr, client_addr;
     char buffer[1024 * 64];
@@ -24,7 +21,8 @@ int main(){
     }
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    //this is gonna be local from now on
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     server_addr.sin_port = htons(PORT);
 
     if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
