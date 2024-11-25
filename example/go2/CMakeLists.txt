@@ -20,4 +20,5 @@ target_link_libraries(go2_video_client unitree_sdk2)
 add_executable(go2_vui_client go2_vui_client.cpp)
 target_link_libraries(go2_vui_client unitree_sdk2)
 
-add_executable(subscribe_pointcloud.cpp)
+add_executable(subscribe_pointcloud subscribe_pointcloud.cpp)
+target_link_libraries(subscribe_pointcloud unitree_sdk2)
