@@ -2,42 +2,40 @@
 #include <iostream>
 #include <fstream>
 #include <ctime>
-
-
 #include <unistd.h>
 #include <vector>
 #include <cstring>
 #include <arpa/inet.h>
-// #include "subscribe_pointcloud.cpp"
-
 #include <unitree/robot/channel/channel_subscriber.hpp>
 #include <unitree/common/time/time_tool.hpp>
 #include <unitree/idl/ros2/PointCloud2_.hpp>
 
 #define TOPIC_CLOUD "rt/utlidar/cloud"
+#define PORT 8080
+#define CHUNK_SIZE 60000  // Slightly less than max UDP size
+#define HEADER_SIZE 8 
 
 using namespace unitree::robot;
 using namespace unitree::common;
 
-#define PORT 8080
+struct PacketHeader {
+    uint32_t total_chunks;
+    uint32_t chunk_index;
+};
 
-//LIDAR HANDLER
-void Handler(const void *message)
-{
-  const sensor_msgs::msg::dds_::PointCloud2_ *cloud_msg = (const sensor_msgs::msg::dds_::PointCloud2_ *)message;
-  std::cout << "Received a raw cloud here!"
-            << "\n\tstamp = " << cloud_msg->header().stamp().sec() << "." << cloud_msg->header().stamp().nanosec()
-            << "\n\tframe = " << cloud_msg->header().frame_id()
-            << "\n\tpoints number = " << cloud_msg->width()
-            << std::endl
-            << std::endl;
+void Handler(const void *message) {
+    const sensor_msgs::msg::dds_::PointCloud2_ *cloud_msg = 
+        (const sensor_msgs::msg::dds_::PointCloud2_ *)message;
+    std::cout << "Received a raw cloud here!"
+              << "\n\tstamp = " << cloud_msg->header().stamp().sec() 
+              << "." << cloud_msg->header().stamp().nanosec()
+              << "\n\tframe = " << cloud_msg->header().frame_id()
+              << "\n\tpoints number = " << cloud_msg->width()
+              << std::endl << std::endl;
 }
 
-
-int main(int argc, char** argv){
-
-
-    //THIS WILL BE THE IMAGE CODE
+int main(int argc, char** argv) {
+    // Initialize video client
     unitree::robot::ChannelFactory::Instance()->Init(0);
     unitree::robot::go2::VideoClient video_client;
     video_client.SetTimeout(1.0f);
@@ -45,24 +43,31 @@ int main(int argc, char** argv){
     std::vector<uint8_t> image_sample;
     int imageSuccessCode;
 
-
-    //THIS IS THE SERVER CODE
+    // Create and configure socket
     int sockfd;
     struct sockaddr_in server_addr, client_addr;
-    char buffer[1024 * 64];
-
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    
+    // Create socket with explicit IPv4 protocol
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
 
+    // Clear the structures before use
+    memset(&server_addr, 0, sizeof(server_addr));
+    memset(&client_addr, 0, sizeof(client_addr));
+
+    // Configure server address
     server_addr.sin_family = AF_INET;
-    //this is gonna be local from now on
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    client_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    client_addr.sin_port = htons(8081);
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  // Localhost
     server_addr.sin_port = htons(PORT);
 
+    // Configure client address
+    client_addr.sin_family = AF_INET;
+    client_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  // Localhost
+    client_addr.sin_port = htons(8081);
+
+    // Bind socket
     if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("Bind failed");
         close(sockfd);
@@ -72,25 +77,53 @@ int main(int argc, char** argv){
     std::cout << "UDP Server running on port " << PORT << std::endl;
 
     socklen_t len = sizeof(client_addr);
-
-    //THIS IS THE LIDAR HANDLER CALL
-    // ChannelFactory::Instance()->Init(0, argv[1]);
-    // ChannelSubscriber<sensor_msgs::msg::dds_::PointCloud2_> subscriber(TOPIC_CLOUD);
-    // subscriber.InitChannel(Handler);
+    std::vector<uint8_t> packet_buffer(CHUNK_SIZE + HEADER_SIZE);
 
     while (true) {
-        //get the image data
+        // Get the image data
         imageSuccessCode = video_client.GetImageSample(image_sample);
+        if (imageSuccessCode != 0) {
+            std::cerr << "Failed to get image sample" << std::endl;
+            continue;
+        }
         
+        std::cout << "Image size: " << image_sample.size() << " bytes" << std::endl;
 
-        sendto(sockfd, image_sample.data(), image_sample.size(), 0, (const struct sockaddr *)&client_addr, len);
-        std::cout << image_sample.size() << std::endl;
-        //THIS IS WHERE THE LIDAR CODE WILL GO
-        // std::vector<uint8_t> image_sample;
-        // int ret = video_client.GetImageSample(image_sample);
+        // Calculate total chunks needed
+        uint32_t total_chunks = (image_sample.size() + CHUNK_SIZE - 1) / CHUNK_SIZE;
+        
+        // Send data in chunks
+        for (uint32_t i = 0; i < total_chunks; i++) {
+            // Prepare header
+            PacketHeader header;
+            header.total_chunks = total_chunks;
+            header.chunk_index = i;
 
+            // Copy header to buffer
+            std::memcpy(packet_buffer.data(), &header, HEADER_SIZE);
 
-        usleep(1);
+            // Calculate chunk size for this packet
+            size_t chunk_start = i * CHUNK_SIZE;
+            size_t remaining_bytes = image_sample.size() - chunk_start;
+            size_t this_chunk_size = std::min(remaining_bytes, (size_t)CHUNK_SIZE);
+
+            // Copy chunk data to buffer after header
+            std::memcpy(packet_buffer.data() + HEADER_SIZE, 
+                       image_sample.data() + chunk_start, 
+                       this_chunk_size);
+
+            // Send the packet
+            ssize_t sent_bytes = sendto(sockfd, packet_buffer.data(), 
+                                      this_chunk_size + HEADER_SIZE, 0,
+                                      (const struct sockaddr *)&client_addr, len);
+
+            if (sent_bytes < 0) {
+                perror("Failed to send data");
+                break;
+            }
+        }
+
+        usleep(1000);  // 1ms delay between frames
     }
 
     close(sockfd);
