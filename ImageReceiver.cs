@@ -1,3 +1,5 @@
+//currenty the approach is to drop this in unity under a game object
+//the next step is getting it to load in a vr rig object
 using UnityEngine;
 using System;
 using System.Collections.Generic;
@@ -9,13 +11,14 @@ using System.Threading.Tasks;
 public class VRImageReceiver : MonoBehaviour
 {
     [Header("Network Settings")]
-    [SerializeField] private string host = "127.0.0.1";
+    // [SerializeField] private string host = "127.0.0.1";
+    [SerializeField] private string host = "0.0.0.0";
     [SerializeField] private int port = 8081;
     
     [Header("Display Settings")]
     [SerializeField] private MeshRenderer displayRenderer;
-    [SerializeField] private float distance = 2f;  // Distance from camera
-    [SerializeField] private float width = 16f;    // Using 16:9 aspect ratio
+    [SerializeField] private float distance = 2f;
+    [SerializeField] private float width = 16f;
     [SerializeField] private float height = 9f;
     [SerializeField] private bool curvedDisplay = true;
     [SerializeField] private float curveRadius = 2f;
@@ -158,7 +161,6 @@ public class VRImageReceiver : MonoBehaviour
             targetRotation = transform.rotation;
         }
     }
-
 
 
     private void OnDisable()
