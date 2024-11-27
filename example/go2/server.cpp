@@ -63,10 +63,11 @@ int main(int argc, char** argv) {
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    Configure client address
+    // Configure client address
     client_addr.sin_family = AF_INET;
     // client_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  // Localhost
-    client_addr.sin_addr.s_addr = inet_addr("192.168.168.120"); 
+    // client_addr.sin_addr.s_addr = inet_addr("192.168.168.120"); 
+    client_addr.sin_addr.s_addr = inet_addr("172.20.10.11"); 
     client_addr.sin_port = htons(8081);
 
     // Bind socket
